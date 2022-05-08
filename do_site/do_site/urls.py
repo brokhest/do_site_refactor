@@ -22,6 +22,6 @@ urlpatterns = [
     path('login/', include('Login.urls')),
     path('todo/', include('todo.urls')),
     path('files/', include('files.urls')),
-    path('messageboard/', include('messageboard.urls'))
+    path('forum/', include('forum.urls'))
 
 ]

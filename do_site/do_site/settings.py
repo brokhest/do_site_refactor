@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     'Login.apps.LoginConfig',
     'todo.apps.TodoConfig',
     'files.apps.FilesConfig',
-    'messageboard.apps.MessageboardConfig'
+    'forum.apps.MessageboardConfig'
 ]
 AUTH_USER_MODEL = 'Login.User'
 

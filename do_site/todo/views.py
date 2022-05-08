@@ -1,109 +1,73 @@
-import jwt
 from django.http import JsonResponse
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from Login.models import User
+from Login.views import get_user
 from .models import Task, Category
 from rest_framework.response import Response
-from .serializers import TaskSerializer
-from do_site.settings import SECRET_KEY
+
 
 # Create your views here.
 
-def Get_token(request):
-    token = request.headers.get('Authorization')
-    if token is not None:
-        token = token.split()
-        return token[1]
-    return 0
-
-
-
-def Get_user(request):
-    token = Get_token(request)
-    if token == 0:
-        return 0
-    payload = jwt.decode(jwt=token, key=SECRET_KEY, algorithms='HS256')
-    return get_object_or_404(User.objects.all(), pk=payload.get('id'))
-
-
-class GetTask(APIView):
-    permission_classes = (IsAuthenticated, )
-
-    def get(self, request, pk):
-        user = Get_user(request)
-        task = get_object_or_404(user.tasks.all(), pk=pk)
-        record = {
-            "title": task.title,
-            "description": task.desc,
-            "completion": task.completion,
-            "pk": task.pk
-        }
-        return JsonResponse(record, safe=False)
-
 
 class Tasks(APIView):
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated,)
 
-    def get(self, request):
-        user = Get_user(request)
+    @staticmethod
+    def get(request):
+        user = get_user(request)
         data = []
         for task in user.tasks.all():
-                record = {
-                    "title": task.title,
-                    "description": task.desc,
-                    "completion": task.completion,
-                    'category': task.category.name,
-                    "pk": task.pk
-                }
-                data.append(record)
+            record = {
+                "title": task.title,
+                "description": task.desc,
+                "completion": task.completion,
+                'category': "None",
+                "pk": task.pk
+            }
+            if task.category is not None:
+                record.update({"category": task.category.name})
+            data.append(record)
         return JsonResponse(data, safe=False)
 
-    def post(self, request):
-        user = Get_user(request)
-        data = request.data.get('task')
-        # task ={
-        #     "title": data['title'],
-        #     "desc": data['desc'],
-        #     "completion": data['completion'],
-        #     "user": user.pk
-        # }
-        task = Task(title=data['title'], desc=data['desc'],
-                    completion=data['completion'],
+    @staticmethod
+    def post(request):
+        user = get_user(request)
+        task = Task(title=request.data.get('title'), desc=request.data.get('desc'),
                     user=user)
         task.save()
-        # serializer = TaskSerializer(user, data=task)
-        # if serializer.is_valid(raise_exception=True):
-        #     serializer.save()
-        return Response({"success": "yes"})
-        # return Response({"success":"no"})
+        return Response(status=status.HTTP_201_CREATED)
 
-    def put(self, request, pk):
-        user = Get_user(request)
+    @staticmethod
+    def put(request, pk):
+        user = get_user(request)
         task = get_object_or_404(user.tasks.all(), pk=pk)
-        data = request.data.get('task')
-        cat = get_object_or_404(user.categories.all(), name=data.get('category'))
-        data.update({"category": cat.pk})
-        serializer = TaskSerializer(instance=task, data=data, partial=True)
-        if serializer.is_valid(raise_exception=True):
-            serializer.save()
-            return Response({"success": "yes"})
-        return Response({"success": "no"})
+        task.category = None
+        if request.data.get('category') != "None":
+            cat = get_object_or_404(user.categories.all(), name=request.data.get('category'))
+            print(cat.name)
+            task.category = cat
+        task.title = request.data.get("title")
+        task.desc = request.data.get("desc")
+        task.completion = request.data.get("completion")
+        task.save()
+        return Response(status=status.HTTP_200_OK)
 
-    def delete(self, request, pk):
-        user = Get_user(request)
+    @staticmethod
+    def delete(request, pk):
+        user = get_user(request)
         task = get_object_or_404(user.tasks.all(), pk=pk)
         task.delete()
-        return Response({"success": "yes"})
+        return Response(status=status.HTTP_200_OK)
 
 
 class Categories(APIView):
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request):
-        user = Get_user(request)
+    @staticmethod
+    def get(request):
+        user = get_user(request)
         data = []
         for cat in user.categories.all():
             record = {
@@ -113,42 +77,48 @@ class Categories(APIView):
             data.append(record)
         return JsonResponse(data, safe=False)
 
-    def post(self, request):
-        user = Get_user(request)
+    @staticmethod
+    def post(request):
+        user = get_user(request)
         if len(user.categories.filter(name=request.data.get('name'))) == 0:
             cat = Category(name=request.data.get('name'), user=user)
             cat.save()
             return Response(status=status.HTTP_201_CREATED)
-        else:
-            return Response(status=status.HTTP_409_CONFLICT)
+        return Response(status=status.HTTP_409_CONFLICT)
 
-    def put(self, request, name):
-        user = Get_user(request)
+    @staticmethod
+    def put(request, name):
+        user = get_user(request)
+        print(name)
         cat = get_object_or_404(user.categories.all(), name=name)
-        cat.name = request.data.get('name')
-        cat.save()
-        return Response(status=status.HTTP_200_OK)
+        if len(user.categories.filter(name=request.data.get('name'))) == 0:
+            cat.name = request.data.get('name')
+            cat.save()
+            return Response(status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_409_CONFLICT)
 
-    def delete(self, request, name):
-        user = Get_user(request)
+    @staticmethod
+    def delete(request, name):
+        user = get_user(request)
         cat = get_object_or_404(user.categories.all(), name=name)
         cat.delete()
         return Response(status=status.HTTP_200_OK)
 
 
-class Category_tasks(APIView):
+class CategoryTasks(APIView):
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request, name):
-        user = Get_user(request)
+    @staticmethod
+    def get(request, name):
+        user = get_user(request)
         cat = get_object_or_404(user.categories.all(), name=name)
         data = []
         for task in user.tasks.all().filter(category=cat):
-                record = {
-                    "title": task.title,
-                    "description": task.desc,
-                    "completion": task.completion,
-                    "pk": task.pk
-                }
-                data.append(record)
+            record = {
+                "title": task.title,
+                "description": task.desc,
+                "completion": task.completion,
+                "pk": task.pk
+            }
+            data.append(record)
         return JsonResponse(data, safe=False)
